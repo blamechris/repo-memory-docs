@@ -1,0 +1,16 @@
+# Dependencies
+node_modules/
+
+# Build output
+public/
+.quartz-cache/
+
+# IDE
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Debug
+*.log
