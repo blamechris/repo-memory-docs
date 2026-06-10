@@ -129,7 +129,9 @@ Returns a structural overview: directory tree, entry points, and language breakd
 
 ## `search_by_purpose`
 
-Finds files by purpose/exports keywords — search by concept (e.g. "database", "auth", "validation") instead of grepping. Matches against each file's purpose, exports, and top-level declarations; only files that have been summarized before (via `get_file_summary`, `batch_file_summaries`, `force_reread`, or the [[tools-reference#The repo-memory index CLI|`index` prewarm CLI]]) are searchable.
+Finds files by purpose/exports keywords — search by concept (e.g. "database", "auth", "validation") instead of grepping. Matches against each file's purpose, exports, top-level declarations, and path segments; only files that have been summarized before (via `get_file_summary`, `batch_file_summaries`, `force_reread`, or the [[tools-reference#The repo-memory index CLI|`index` prewarm CLI]]) are searchable.
+
+Matching is word-boundary aware (0.14.0): identifiers are split on camelCase/snake_case/kebab-case boundaries, so `store` finds `CacheStore` as a whole word; a whole-word hit outranks a prefix hit, which outranks a bare substring; and terms shorter than 3 characters only count as whole identifier words (`id` finds `findUserById` but no longer matches inside `validation`). Path segments (extension excluded) participate at declaration weight, so `src/telemetry/tracker.ts` matches "telemetry" even when its summary text doesn't say the word.
 
 **Input:**
 
