@@ -2,9 +2,18 @@
 title: MCP Tools Reference
 ---
 
-repo-memory exposes 13 MCP tools. The cache-correctness rule applies across all of them: the server never returns stale data — if a file's SHA-256 hash has changed, a fresh summary is generated automatically. Source: [github.com/blamechris/repo-memory](https://github.com/blamechris/repo-memory).
+repo-memory exposes 13 MCP tools, organized into four **groups**. `navigation` and `summaries` are on by default — together they deliver the core "understand the repo without re-reading" loop. `tasks` and `telemetry` are off by default (each MCP tool adds ~100 tokens per turn to the system prompt, so the default surface stays lean); enable them via the `tools` block in `.repo-memory.json` (see [[install-and-configuration#Configuration File|configuration]]).
+
+The cache-correctness rule applies across all tools: the server never returns stale data — if a file's SHA-256 hash has changed, a fresh summary is generated automatically. All stored and returned paths are POSIX-normalized (forward slashes), regardless of platform. Source: [github.com/blamechris/repo-memory](https://github.com/blamechris/repo-memory).
 
 See also: [[agent-patterns|Agent Usage Patterns]] for how to combine these tools, and [[install-and-configuration|Install and Configuration]] to get them into Claude Code.
+
+| Group | Tools | Default |
+|-------|-------|---------|
+| navigation | `get_project_map`, `get_related_files`, `get_dependency_graph`, `get_changed_files` | on |
+| summaries | `get_file_summary`, `batch_file_summaries`, `search_by_purpose`, `force_reread`, `invalidate` | on (`"summaries": false` to disable) |
+| tasks | `create_task`, `get_task_context`, `mark_explored` | off (`"tasks": true` to enable) |
+| telemetry | `get_token_report` | off (`"telemetry": true` to enable) |
 
 ## `get_file_summary`
 
@@ -42,7 +51,15 @@ Returns a cached summary of a file. If the file has not changed since last read,
 
 ## `batch_file_summaries`
 
-Returns summaries for multiple files in a single call. Prefer this over many individual `get_file_summary` calls when exploring a set of related files.
+Returns summaries for multiple files in a single call. Each file goes through the same cache-or-summarize flow as `get_file_summary`. Prefer this over many individual `get_file_summary` calls when exploring a set of related files.
+
+**Input:**
+
+```json
+{ "paths": ["src/server.ts", "src/cache/store.ts", "src/missing.ts"] }
+```
+
+The output contains a `results` array (each entry shaped like a `get_file_summary` response), `totalFiles`, `cacheHits`, `cacheMisses`, and an `errors` array — a failing path (missing file, invalid path) lands in `errors` without failing the batch.
 
 ## `get_changed_files`
 
@@ -83,11 +100,71 @@ Returns a structural overview: directory tree, entry points, and language breakd
 
 ## `search_by_purpose`
 
-Finds files by purpose/exports keywords — search by concept (e.g. "database", "auth", "validation") instead of grepping. Matched files count as `summary_served` in telemetry.
+Finds files by purpose/exports keywords — search by concept (e.g. "database", "auth", "validation") instead of grepping. Matches against each file's purpose, exports, and top-level declarations; only files that have been summarized before (via `get_file_summary`, `batch_file_summaries`, or `force_reread`) are searchable. Matched files count as `summary_served` in telemetry.
+
+**Input:**
+
+```json
+{ "query": "cache invalidation", "limit": 10, "pathPrefix": "src/cache" }
+```
+
+**Output:**
+
+```json
+{
+  "query": "cache invalidation",
+  "results": [
+    {
+      "path": "src/cache/invalidation.ts",
+      "purpose": "source",
+      "matchedOn": ["exports", "declarations"],
+      "exports": ["CacheInvalidator"],
+      "confidence": "high"
+    }
+  ],
+  "totalCached": 12,
+  "scope": "src/cache"
+}
+```
+
+**Parameters:**
+
+- `query` (required): space-separated keywords. Purpose matches are weighted highest, then exports, then declarations.
+- `limit` (optional): max results. Default 20.
+- `pathPrefix` (optional): restrict results to files at or under this path (e.g. `"src/cache"`). Matched on a path boundary, so `"src/cache"` excludes `src/cache-utils.ts`.
+
+`totalCached` is the number of summarized files in scope (after `pathPrefix` filtering), not the number of matches. `scope` is present only when `pathPrefix` was given, echoing the normalized prefix.
 
 ## `get_related_files`
 
-Returns files related to a given file, ranked by relevance. Useful for deciding what else to look at when exploring a file.
+Returns files related to a given file, ranked by relevance. Candidates come from direct imports/importers, transitive dependencies (depth 2), and same-directory files, then get scored by ranking signals (dependency proximity, recency, file type, task context, change frequency). Useful for deciding what else to look at when exploring a file. See [[design/relevance-ranking-design|the relevance-ranking design]] for the signal model.
+
+**Input:**
+
+```json
+{ "path": "src/cache/store.ts", "limit": 5, "task_id": "550e8400-e29b-41d4-a716-446655440000" }
+```
+
+**Output:**
+
+```json
+{
+  "path": "src/cache/store.ts",
+  "relatedFiles": [
+    { "path": "src/persistence/db.ts", "score": 0.82, "relationship": "imports" },
+    { "path": "src/cache/invalidation.ts", "score": 0.74, "relationship": "imported-by" },
+    { "path": "src/cache/gc.ts", "score": 0.61, "relationship": "same-directory" }
+  ]
+}
+```
+
+**Parameters:**
+
+- `path` (required): file to find relations for.
+- `limit` (optional): max results. Default 10.
+- `task_id` (optional): a task whose explored/flagged files should influence ranking (unexplored files rank higher; flagged files get a boost).
+
+`relationship` is one of `"imports"`, `"imported-by"`, `"transitive-dependency"`, or `"same-directory"`.
 
 ## `get_dependency_graph`
 
@@ -98,6 +175,7 @@ Returns dependency graph information. Query a specific file's dependencies/depen
 - `path` (optional): file to query. Omit for full graph summary.
 - `direction` (optional): `"dependencies"`, `"dependents"`, or `"both"` (default `"both"`).
 - `depth` (optional): max traversal depth for transitive queries.
+- `symbol` (optional): filter edges by import specifier (e.g. `"UserService"`), returning only edges that import that symbol.
 
 **Output:**
 
@@ -115,7 +193,7 @@ Returns dependency graph information. Query a specific file's dependencies/depen
 
 ## `create_task`
 
-Creates a new investigation task for tracking file exploration progress.
+Creates a new investigation task for tracking file exploration progress. Part of the `tasks` group (off by default — enable with `"tools": { "tasks": true }`).
 
 **Input:**
 
@@ -157,13 +235,14 @@ Marks a file as explored for a task, with optional status and notes.
 
 ## `get_token_report`
 
-Returns aggregated token telemetry showing cache efficiency and token savings.
+Returns aggregated token telemetry showing cache efficiency and token savings. Part of the `telemetry` group (off by default — enable with `"tools": { "telemetry": true }`).
 
 **Parameters:**
 
 - `period` (optional): `"session"`, `"all"`, or `"last_n_hours"`. Default `"all"`.
 - `hours` (optional): hours to look back (only for `last_n_hours`).
 - `session_id` (optional): session ID (only for `session` period).
+- `include_diagnostics` (optional): include cache health diagnostics (entry counts, stale entries, database size) in the report.
 
 **Output:**
 

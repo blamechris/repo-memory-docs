@@ -17,7 +17,7 @@ Instead of reading every file (potentially thousands of tokens), you get structu
 
 ## Investigation Pattern
 
-When investigating a feature or bug, use task memory to track progress and avoid re-exploring files.
+When investigating a feature or bug, use task memory to track progress and avoid re-exploring files. The task tools are off by default — enable them with `"tools": { "tasks": true }` in [[install-and-configuration#Tool Groups|`.repo-memory.json`]].
 
 1. Call `create_task` with a descriptive name.
 2. Use `get_dependency_graph` to find related files.
@@ -50,7 +50,7 @@ The cache is optimized for token savings, but sometimes you need the full file.
 
 ## Token Budget Management
 
-Use `get_token_report` to monitor and prove cache efficiency — at the end of a session to report savings, or mid-session to spot files accessed repeatedly.
+Use `get_token_report` to monitor and prove cache efficiency — at the end of a session to report savings, or mid-session to spot files accessed repeatedly. It belongs to the `telemetry` group, off by default — enable it with `"tools": { "telemetry": true }` in [[install-and-configuration#Tool Groups|`.repo-memory.json`]]. Pass `include_diagnostics: true` for cache health diagnostics (entry counts, stale entries, database size).
 
 - **High hit ratio (> 0.8)** — the cache is working well; most files are served from cache.
 - **Low hit ratio (< 0.5)** — many first-time reads or frequently changing files; normal early in a session.

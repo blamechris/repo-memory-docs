@@ -17,10 +17,10 @@ MCP Server (stdio transport)
 └── Persistence Layer (SQLite with WAL mode)
 ```
 
-- **Cache Engine** — hashes files (SHA-256), stores and invalidates summaries, ranks by access frequency, and garbage-collects stale entries.
+- **Cache Engine** — hashes files (SHA-256), stores and invalidates summaries, ranks by access frequency, and garbage-collects stale entries. GC runs automatically on server startup, with age thresholds set in [[install-and-configuration#Garbage Collection|the `gc` config block]].
 - **Indexer Pipeline** — discovers files (respecting `.gitignore`), summarizes them via regex, extracts imports/exports, and detects changes through a diff-analyzer.
-- **Dependency Graph** — in-memory adjacency maps backed by SQLite, powering [[tools-reference#get_dependency_graph|`get_dependency_graph`]].
-- **Task Memory** — investigation-task CRUD plus exploration tracking and the unexplored frontier, powering the task tools.
+- **Dependency Graph** — in-memory adjacency maps backed by SQLite, powering [[tools-reference#get_dependency_graph|`get_dependency_graph`]]. Design notes: [[design/dependency-graph-design|Dependency Graph]].
+- **Task Memory** — investigation-task CRUD plus exploration tracking and the unexplored frontier, powering the task tools. Design notes: [[design/task-memory-design|Task Memory]].
 - **Telemetry** — token tracking with sampling, export, and retention, powering [[tools-reference#get_token_report|`get_token_report`]].
 - **Session Manager** — cross-turn session persistence so investigations survive context-window resets.
 
@@ -76,6 +76,8 @@ Config files (JSON, YAML, TOML) and other types get basic classification.
 
 - **SQLite with WAL mode** — concurrent reads while writing; database at `.repo-memory/cache.db` in the target project.
 - **SHA-256 hashing** — deterministic file comparison; unchanged hash means the cached summary is still valid.
+- **POSIX-normalized paths** — all stored paths (cache keys, import edges, task files) use forward slashes regardless of platform, so lookups and prefix scoping (e.g. `search_by_purpose`'s `pathPrefix`) behave identically on Windows and Unix.
+- **Per-key config validation** — an invalid value in `.repo-memory.json` is skipped with a warning while the valid keys still apply; only an unreadable or unparseable file falls back fully to defaults.
 - **Regex-based summarization** — no AST required; fast extraction of exports, imports, and declarations.
 - **ESM only** — `"type": "module"` with NodeNext resolution.
 - **Cache correctness over performance** — never return stale data; when in doubt, re-read the file.

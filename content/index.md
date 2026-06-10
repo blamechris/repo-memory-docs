@@ -11,6 +11,7 @@ title: Repo Memory Documentation
 - [[install-and-configuration|Install and Configuration]] — getting set up with Claude Code or a global install
 - [[agent-patterns|Agent Usage Patterns]] — recommended exploration patterns for agents
 - [[developer-guide|Developer Guide]] — contributing, project structure, and conventions
+- [[design/index|Design Notes]] — the design spikes behind task memory, the dependency graph, relevance ranking, and diff-aware updates
 
 ## Key Facts
 
@@ -22,20 +23,22 @@ title: Repo Memory Documentation
 
 ## The 13 Tools at a Glance
 
-| Tool | What it does |
-|------|--------------|
-| `get_file_summary` | Cached file summary (exports, imports, purpose, declarations, line count) |
-| `batch_file_summaries` | Summaries for multiple files in one call |
-| `get_changed_files` | Files changed, added, or deleted since last check |
-| `get_project_map` | Structural overview: tree, entry points, language breakdown |
-| `search_by_purpose` | Find files by purpose/exports keywords |
-| `get_related_files` | Related files ranked by relevance |
-| `get_dependency_graph` | File dependency relationships |
-| `create_task` | Start an investigation task |
-| `get_task_context` | Task state, explored files, unexplored frontier |
-| `mark_explored` | Mark a file explored/skipped/flagged with notes |
-| `get_token_report` | Token usage and savings telemetry |
-| `force_reread` | Force a fresh summary from disk |
-| `invalidate` | Clear cache entries (single file or all) |
+Tools are organized into **groups**: `navigation` and `summaries` are on by default; `tasks` and `telemetry` are off by default and toggled via the `tools` block in `.repo-memory.json` (see [[install-and-configuration#Configuration File|configuration]]).
+
+| Tool | Group | What it does |
+|------|-------|--------------|
+| `get_project_map` | navigation | Structural overview: tree, entry points, language breakdown |
+| `get_related_files` | navigation | Related files ranked by relevance |
+| `get_dependency_graph` | navigation | File dependency relationships |
+| `get_changed_files` | navigation | Files changed, added, or deleted since last check |
+| `get_file_summary` | summaries | Cached file summary (exports, imports, purpose, declarations, line count) |
+| `batch_file_summaries` | summaries | Summaries for multiple files in one call |
+| `search_by_purpose` | summaries | Find files by purpose/exports keywords, optionally scoped to a directory |
+| `force_reread` | summaries | Force a fresh summary from disk |
+| `invalidate` | summaries | Clear cache entries (single file or all) |
+| `create_task` | tasks | Start an investigation task |
+| `get_task_context` | tasks | Task state, explored files, unexplored frontier |
+| `mark_explored` | tasks | Mark a file explored/skipped/flagged with notes |
+| `get_token_report` | telemetry | Token usage and savings telemetry |
 
 See the [[tools-reference|full tools reference]] for inputs, outputs, and parameters.

@@ -37,7 +37,7 @@ npm run benchmark         # Performance benchmarks
 src/
   server.ts           # MCP server entry point, tool registration
   types.ts            # Shared type definitions (CacheEntry, FileSummary, ImportRef)
-  config.ts           # Configuration loading
+  config.ts           # Configuration loading (per-key validation of .repo-memory.json)
   tools/              # MCP tool handlers (one file per tool)
   cache/              # Cache engine
     hash.ts           #   SHA-256 file hashing
@@ -61,10 +61,11 @@ src/
     task.ts           #   Investigation task CRUD
   telemetry/          # Usage tracking (token savings estimation)
   utils/
+    posix-path.ts     #   POSIX (forward-slash) path normalization for stored paths
     validate-path.ts  #   Path security validation
 ```
 
-See [[architecture|Architecture and Caching]] for how these layers fit together.
+See [[architecture|Architecture and Caching]] for how these layers fit together, and the [[design/index|Design Notes]] for the design spikes behind the bigger subsystems.
 
 ## Testing
 
