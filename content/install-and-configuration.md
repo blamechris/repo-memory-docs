@@ -2,7 +2,7 @@
 title: Install and Configuration
 ---
 
-repo-memory ships as the npm package `@blamechris/repo-memory` and runs as an MCP server over stdio. It needs Node.js 20+. The current published version is 0.14.0; if you pin versions, note that 0.7.0 was never published — the npm registry goes straight from 0.6.0 to 0.8.0. Source: [github.com/blamechris/repo-memory](https://github.com/blamechris/repo-memory).
+repo-memory ships as the npm package `@blamechris/repo-memory` and runs as an MCP server over stdio. It needs Node.js 20+. The current published version is 0.15.0; if you pin versions, note that 0.7.0 was never published — the npm registry goes straight from 0.6.0 to 0.8.0. Source: [github.com/blamechris/repo-memory](https://github.com/blamechris/repo-memory).
 
 ## Quick Start with Claude Code
 

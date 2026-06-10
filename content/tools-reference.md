@@ -6,7 +6,7 @@ repo-memory exposes 13 MCP tools, organized into four **groups**. `navigation` a
 
 The cache-correctness rule applies across all tools: the server never returns stale data — if a file's SHA-256 hash has changed, a fresh summary is generated automatically. All stored and returned paths are POSIX-normalized (forward slashes), regardless of platform. Source: [github.com/blamechris/repo-memory](https://github.com/blamechris/repo-memory).
 
-See also: [[agent-patterns|Agent Usage Patterns]] for how to combine these tools, and [[install-and-configuration|Install and Configuration]] to get them into Claude Code. Besides the MCP tools, the package ships one CLI subcommand for prewarming the cache — see [[tools-reference#The repo-memory index CLI|the `repo-memory index` CLI]] at the end of this page.
+See also: [[agent-patterns|Agent Usage Patterns]] for how to combine these tools, and [[install-and-configuration|Install and Configuration]] to get them into Claude Code. Besides the MCP tools, the package ships two CLI subcommands — [[tools-reference#The repo-memory index CLI|`repo-memory index`]] for prewarming the cache and [[tools-reference#The repo-memory report CLI|`repo-memory report`]] for reading telemetry from the shell — see the end of this page.
 
 | Group | Tools | Default |
 |-------|-------|---------|
@@ -314,7 +314,7 @@ Returns aggregated token telemetry showing cache efficiency and token savings. P
 }
 ```
 
-See [[architecture#Token Savings|how savings are calculated]] for the underlying token math. Note that [[tools-reference#The repo-memory index CLI|`repo-memory index`]] prewarm runs record no telemetry events (0.11.0+), so the report reflects agent traffic only.
+See [[architecture#Token Savings|how savings are calculated]] for the underlying token math. Note that [[tools-reference#The repo-memory index CLI|`repo-memory index`]] prewarm runs record no telemetry events (0.11.0+), so the report reflects agent traffic only. The same report is available from the shell via [[tools-reference#The repo-memory report CLI|`repo-memory report`]] (0.15.0+) — telemetry events are always recorded; enabling this tool group only adds the in-conversation MCP tool.
 
 ## `force_reread`
 
@@ -383,3 +383,36 @@ To keep the cache warm automatically, run it from a git `post-merge` hook so eve
 ```
 
 The subshell-and-background form keeps pulls fast; with `--quiet` the run is silent. Note `post-merge` does not fire on rebase pulls (`git pull --rebase`).
+
+
+## The `repo-memory report` CLI
+
+The second CLI subcommand (0.15.0+): prints the token telemetry report for a project and exits. Telemetry events are always recorded by the cache paths — the `telemetry` tool group only gates the [[tools-reference#get_token_report|`get_token_report`]] MCP tool, which costs ~100 tokens per turn of system prompt while enabled. The CLI reads the same data from the shell at zero token cost, in any project, without touching its config.
+
+```bash
+repo-memory report                  # all recorded events for the current directory
+repo-memory report --hours 24      # last day only
+repo-memory report --json          # machine-readable (same shape as get_token_report)
+repo-memory report --diagnostics   # add cache health (entry counts, db size, age)
+```
+
+**Output:**
+
+```
+$ repo-memory report --hours 24
+Token report for /path/to/project (last 24h)
+  events:        156 (132 hits / 24 misses, 84.6% hit ratio)
+  tokens saved:  ~482,000
+  breakdown:     cache_hit 132, cache_miss 24
+  top files:
+    12x src/server.ts (~8,400 tokens)
+```
+
+**Parameters:**
+
+- `projectRoot` (optional): directory to report on. Default: current directory.
+- `--hours N`: restrict to the last N hours (default: all recorded events).
+- `--json`: print the raw report JSON.
+- `--diagnostics`: include cache health (entry counts, stale entries, db size, age distribution).
+
+Exits `0` on success, `1` on error (message on stderr).
