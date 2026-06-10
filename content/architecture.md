@@ -26,7 +26,7 @@ MCP Server (stdio transport)
 
 ## How the Cache Works
 
-**First access (cache miss):** the agent calls [[tools-reference#get_file_summary|`get_file_summary`]]. The server reads the file, SHA-256 hashes it, extracts a summary via the configured summarizer (exports, imports, purpose, declarations, line count), stores the hash plus summary in SQLite, and returns the compact summary. No savings yet — the file had to be read. (The [[tools-reference#The repo-memory index CLI|`repo-memory index` CLI]] can pay this first-read cost ahead of time, e.g. as a post-pull hook or CI step.)
+**First access (cache miss):** the agent calls [[tools-reference#get_file_summary|`get_file_summary`]]. The server reads the file, SHA-256 hashes it, extracts a summary via the configured summarizer (exports, imports, purpose, declarations, line count), stores the hash plus summary in SQLite, and returns the compact summary. No savings yet — the file had to be read. (The [[tools-reference#The repo-memory index CLI|`repo-memory index` CLI]] can pay this first-read cost ahead of time, e.g. as a git post-merge hook or CI step.)
 
 **Subsequent access (cache hit):** the server re-reads and hashes the file; the hash matches the stored value, so it returns the cached summary without re-parsing. The savings — full-file tokens minus summary tokens — are logged.
 
@@ -48,6 +48,8 @@ tokensSaved = ceil(rawFileChars / 4) - ceil(summaryJsonChars / 4)
 | `invalidation` | Cache entry cleared | — |
 | `summary_served` | File matched via `search_by_purpose` | Estimated raw file tokens |
 
+Prewarm runs via the [[tools-reference#The repo-memory index CLI|`repo-memory index` CLI]] record no telemetry events (0.11.0+) — earlier versions logged a `cache_miss` per indexed file, which distorted agent-traffic hit-ratio stats. The report from [[tools-reference#get_token_report|`get_token_report`]] therefore reflects agent traffic only.
+
 ## Performance
 
 Benchmarks on synthetic TypeScript projects with realistic imports and class structures show a sustained ~3.6x compression ratio and sub-millisecond per-file cached reads:
@@ -63,12 +65,16 @@ Run them yourself with `npm run benchmark`.
 
 ## Language Support
 
-Summaries are extracted via regex analysis, or from tree-sitter parse trees when [[install-and-configuration#Summarizer|`"summarizer": "ast"`]] is set. All four language families below have AST support in `ast` mode, which adds semantic purpose lines derived from doc comments; regex stays as the universal fallback for other languages and unparseable files.
+Summaries are extracted via regex analysis, or from tree-sitter parse trees when [[install-and-configuration#Summarizer|`"summarizer": "ast"`]] is set. All six language families below have AST support in `ast` mode, which adds semantic purpose lines derived from doc comments; regex stays as the universal fallback for other languages and unparseable files.
 
 - **TypeScript / JavaScript** — exports, imports, declarations, purpose classification; AST mode adds JSDoc-derived purpose lines
 - **Python** — functions, classes (incl. `async def`), `__all__`, `from`/`import` statements; AST mode adds docstring-derived purpose lines
 - **Go** — exported names (uppercase), imports, type/func/var/const declarations; AST mode adds doc-comment purpose lines and grouped `var (…)` / `const (…)` support
 - **Rust** — `pub` items, `use`/`mod` statements, structs/enums/traits/impls; AST mode adds `///` doc-comment purpose lines and `pub use` re-exports
+- **Kotlin** (`.kt/.kts`, 0.11.0+) — AST mode only: public top-level `fun`/`class`/`object`/`interface`/`enum class`/`data class`/`val`/`var`/`typealias` (excluding `private`/`internal`), `import` paths, KDoc-derived purpose lines; regex mode gives only basic filename classification
+- **Java** (0.11.0+) — AST mode only: public types and the public methods/fields of the public type, `import` statements (incl. `static` and wildcard), Javadoc-derived purpose lines; regex mode gives only basic filename classification
+
+The dependency graph ([[tools-reference#get_related_files|`get_related_files`]], [[tools-reference#get_dependency_graph|`get_dependency_graph`]]) extracts imports for all six language families regardless of summarizer mode.
 
 Config files (JSON, YAML, TOML) and other types get basic classification.
 

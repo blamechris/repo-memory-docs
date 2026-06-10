@@ -51,7 +51,7 @@ src/
     scanner.ts        #   Project file discovery (respects .gitignore)
     summarize.ts      #   Summarizer dispatch (regex vs AST) + cache generation tag
     summarizer.ts     #   Regex-based file summarization
-    ast-summarizer.ts #   Tree-sitter (WASM) summarization: TS/JS, Python, Go, Rust
+    ast-summarizer.ts #   Tree-sitter (WASM) summarization: TS/JS, Python, Go, Rust, Kotlin, Java
     smart-summarizer.ts # Enhanced summarization
     imports.ts        #   Import/export extraction
     diff-analyzer.ts  #   Change detection

@@ -289,7 +289,7 @@ Returns aggregated token telemetry showing cache efficiency and token savings. P
 }
 ```
 
-See [[architecture#Token Savings|how savings are calculated]] for the underlying token math.
+See [[architecture#Token Savings|how savings are calculated]] for the underlying token math. Note that [[tools-reference#The repo-memory index CLI|`repo-memory index`]] prewarm runs record no telemetry events (0.11.0+), so the report reflects agent traffic only.
 
 ## `force_reread`
 
@@ -319,7 +319,7 @@ Invalidates cached entries. Target a single file via `path`, or pass an empty ob
 
 ## The `repo-memory index` CLI
 
-Not an MCP tool, but part of the same package (0.10.0+). Running the `repo-memory` binary with no arguments starts the MCP server on stdio; `repo-memory index [projectRoot] [--quiet]` instead prewarms the summary cache and exits. The first time an agent touches a file it pays full price — the summary has to be generated — so this lets you pay that cost ahead of time (post-pull hook, CI step) and start the first session with cache hits.
+Not an MCP tool, but part of the same package (0.10.0+). Running the `repo-memory` binary with no arguments starts the MCP server on stdio; `repo-memory index [projectRoot] [--quiet]` instead prewarms the summary cache and exits. The first time an agent touches a file it pays full price — the summary has to be generated — so this lets you pay that cost ahead of time (post-merge hook, CI step) and start the first session with cache hits.
 
 ```bash
 repo-memory index            # index the current directory
@@ -327,7 +327,7 @@ repo-memory index /path/to/project
 repo-memory index --quiet    # no output on success (for scripts/CI)
 ```
 
-It scans the project, hashes every indexable file, and generates summaries for entries that are missing or stale. Unchanged files are left untouched, so it is cheap to run repeatedly. It reuses the standard summary path, so it respects `.repo-memory.json` (ignore patterns, `maxFiles`, [[install-and-configuration#Summarizer|summarizer mode]]); MCP server behavior is unchanged.
+It scans the project, hashes every indexable file, and generates summaries for entries that are missing or stale. Unchanged files are left untouched, so it is cheap to run repeatedly. It reuses the standard summary path, so it respects `.repo-memory.json` (ignore patterns, `maxFiles`, [[install-and-configuration#Summarizer|summarizer mode]]); MCP server behavior is unchanged. Prewarm runs do not record telemetry events (0.11.0+) — earlier versions logged a `cache_miss` per file, distorting agent-traffic hit-ratio stats in [[tools-reference#get_token_report|`get_token_report`]].
 
 **Output:**
 
@@ -348,3 +348,13 @@ Indexed /path/to/project
 - `--quiet` / `-q`: print nothing on success.
 
 Exits `0` on success, `1` on error (message on stderr).
+
+To keep the cache warm automatically, run it from a git `post-merge` hook so every pull/merge re-indexes only what changed:
+
+```sh
+#!/bin/sh
+# .git/hooks/post-merge (chmod +x)
+(npx -y @blamechris/repo-memory index . --quiet >/dev/null 2>&1 &)
+```
+
+The subshell-and-background form keeps pulls fast; with `--quiet` the run is silent. Note `post-merge` does not fire on rebase pulls (`git pull --rebase`).

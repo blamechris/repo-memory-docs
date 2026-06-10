@@ -2,7 +2,7 @@
 title: AST Summarizer — Spike and Rollout
 ---
 
-Design spike for the AST-based summarizer behind [[install-and-configuration#Summarizer|`"summarizer": "ast"`]] in `.repo-memory.json` (default `'regex'`). The engine lives in `src/indexer/ast-summarizer.ts`; config dispatch and cache generation in `src/indexer/summarize.ts`. The spike scoped TypeScript/JavaScript (`.ts/.tsx/.js/.jsx/.mjs/.cjs`); the recommendation was GO, and the rollout has since extended AST support to Python, Go, and Rust.
+Design spike for the AST-based summarizer behind [[install-and-configuration#Summarizer|`"summarizer": "ast"`]] in `.repo-memory.json` (default `'regex'`). The engine lives in `src/indexer/ast-summarizer.ts`; config dispatch and cache generation in `src/indexer/summarize.ts`. The spike scoped TypeScript/JavaScript (`.ts/.tsx/.js/.jsx/.mjs/.cjs`); the recommendation was GO, and the rollout has since extended AST support to Python, Go, Rust, Kotlin, and Java.
 
 ## Hypothesis
 
@@ -94,6 +94,7 @@ Rollout status:
 3. Flip the default to `ast` for TS/JS after a release of soak time; the generation tag handles the cache migration automatically.
 4. **Done.** Extend to Python/Go/Rust: per-language extraction visitors in `ast-summarizer.ts` (exports, imports, declarations, doc-comment purpose lines), with the three grammar wasms vendored alongside the TS/JS ones. Regex stays as the universal fallback; summarizer generation bumped to 2 so ast-mode caches for these languages regenerate lazily.
 5. **Done.** Fix the `async` export bug in the regex summarizer independently — it benefits the fallback path and non-TS languages' sibling patterns.
+6. **Done.** Extend to Kotlin (`.kt/.kts`) and Java (0.11.0): per-language extraction visitors (public-API exports with `private`/`internal` filtering for Kotlin and `public`-member filtering for Java, dotted import paths, KDoc/Javadoc purpose lines), grammar wasms vendored (8 total in `dist/grammars/`; tarball ~573 kB → ~1.2 MB compressed), summarizer generation bumped to 3. Unlike the earlier languages, the regex summarizer has no Kotlin/Java extraction, so AST mode is the only real engine for them — the fallback path yields generic filename-based classification only. Simple regex import extraction for Kotlin/Java was added to `imports.ts` so the dependency graph covers them in both modes. Known grammar quirk: `tree-sitter-kotlin` rejects single-line class bodies (`class C { fun f() {} }`), which triggers the regex fallback for such files.
 
 Caveats:
 

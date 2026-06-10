@@ -49,7 +49,7 @@ No full rebuild is needed. Bulk initial indexing uses the same per-file path ins
 
 ## Multi-Language Extensibility
 
-Import extraction is regex-based and per-language. The current `extractImports` handles TypeScript/JavaScript (ESM imports, CJS require, re-exports, dynamic imports). New languages can be supported by:
+Import extraction is regex-based and per-language. `extractImports` started with TypeScript/JavaScript (ESM imports, CJS require, re-exports, dynamic imports) and has since grown extractors for Python, Go, Rust, and (0.11.0) Kotlin/Java — all six language families, regardless of summarizer mode. New languages can be supported by:
 
 1. Adding a new extractor function with the same `(filePath, contents, projectRoot) => ImportRef[]` signature.
 2. Dispatching on file extension in the scanner.
