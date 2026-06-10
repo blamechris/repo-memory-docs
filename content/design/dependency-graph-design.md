@@ -4,6 +4,14 @@ title: Dependency Graph — Data Model and Query Patterns
 
 Design for the dependency graph that powers [[tools-reference#get_dependency_graph|`get_dependency_graph`]] and feeds the [[design/relevance-ranking-design|relevance-ranking]] signals. Stored paths in `imports` are POSIX-normalized in the shipped implementation (see [[architecture#Design Decisions|design decisions]]).
 
+> [!note] Shipped implementation (0.13.0)
+> The design below proposed persisting edges and rebuilding the in-memory graph from the table. What originally shipped diverged in a costly way: the persisted table was written but never read — both graph tools re-read every project file per call and rewrote the whole `imports` table as a side effect of a read. The 2026-06 [[design/agent-search-audit|search-efficiency audit]] made this its unanimous headline finding, and 0.13.0 closed the loop:
+>
+> - **Write path:** edges are persisted whenever a summary is generated (`get_file_summary`, batch, prewarm, `get_changed_files` re-extraction), inside a transaction (delete-then-insert per source file).
+> - **Read path:** graph queries load the stored edges, prune entries for deleted files, and stat-gate the rest — only files whose mtime is newer than their last check (minus a 2-second safety window for coarse filesystem timestamps) get re-hashed, and only actual hash changes get re-read. A warm query touches no project files and writes nothing.
+> - **Resolution:** relative import targets are resolved to real on-disk paths at extraction time (`./store.js` probes to `src/cache/store.ts`, `index.*` resolution included); bare specifiers are external by definition and are not persisted. This killed the phantom-path class of bugs — `getDependents` misses, one-hop traversal dead-ends, `vitest`/`fs` in `mostConnected`.
+> - **One extension list** shared by `get_dependency_graph` and `get_related_files`, so language coverage can't drift between them again.
+
 ## Storage
 
 SQLite adjacency list in the existing `cache.db`. Each import edge is a row in an `imports` table. On server startup, the full graph is rebuilt in memory from this table for fast traversal.

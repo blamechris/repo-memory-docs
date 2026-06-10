@@ -30,7 +30,6 @@ Returns a cached summary of a file. If the file has not changed since last read,
 ```json
 {
   "path": "src/server.ts",
-  "hash": "a1b2c3d4e5f6...",
   "summary": {
     "purpose": "entry point",
     "exports": ["main"],
@@ -40,15 +39,15 @@ Returns a cached summary of a file. If the file has not changed since last read,
     "confidence": "high"
   },
   "fromCache": true,
-  "reason": "cache_hit: hash unchanged",
   "cacheAge": 42,
   "suggestFullRead": false
 }
 ```
 
 - `suggestFullRead` is `true` when summary confidence is `"low"`, signalling the agent should read the full file for accuracy.
-- `cacheAge` is in seconds since last check, or `null` if no prior cache entry exists.
-- Summary quality depends on the `summarizer` setting in `.repo-memory.json`: `"regex"` (default) or `"ast"`. AST mode yields more accurate exports and a semantic `purpose` line naming the dominant symbols; files that fail to parse fall back to the regex engine automatically. See [[install-and-configuration#Summarizer|the summarizer config]].
+- `cacheAge` is in seconds since the cached entry was last validated; only present on cache hits. The debug fields earlier versions echoed back (`hash`, `reason`) were dropped in 0.13.0 — they cost tokens on every call and carried nothing an agent could act on.
+- Generating a summary also persists the file's import edges, so the [[tools-reference#get_dependency_graph|dependency graph]] stays as fresh as the summary cache.
+- Summary quality depends on the `summarizer` setting in `.repo-memory.json`: `"ast"` (default since 0.12.0) or `"regex"`. AST mode yields more accurate exports and a semantic `purpose` line naming the dominant symbols; files that fail to parse fall back to the regex engine automatically. See [[install-and-configuration#Summarizer|the summarizer config]].
 
 ## `batch_file_summaries`
 
@@ -85,15 +84,16 @@ Returns files that have changed, been added, or been deleted since the last chec
 
 - On first run (empty cache), all files appear in `added`.
 - Running this tool updates the cached hashes, so the next call only shows changes since this call.
+- When a file's hash changes, its now-stale summary is dropped (it regenerates on next access) and its import edges are re-extracted, so neither the summary cache nor the dependency graph can drift. Earlier versions had a serious bug here — the new hash was stored alongside the old summary, turning every later lookup into a confident stale hit; fixed in 0.13.0.
 
 ## `get_project_map`
 
-Returns a structural overview: directory tree, entry points, and language breakdown. The output is deliberately compact — per-file entries carry only `name`, `purpose`, and `size` (no `lastModified` or `confidence`), and zero-byte `.gitkeep` placeholder files are omitted from the tree, making the map roughly 45% smaller.
+Returns a structural overview: directory tree, entry points, and language breakdown. The output is deliberately compact — per-file entries carry only `name` and `purpose` (a directory's path is derivable from its nesting), and zero-byte `.gitkeep` placeholder files are omitted from the tree.
 
 **Input:**
 
 ```json
-{ "project_root": "/absolute/path/to/project", "depth": 2 }
+{ "depth": 2 }
 ```
 
 **Output:**
@@ -102,15 +102,13 @@ Returns a structural overview: directory tree, entry points, and language breakd
 {
   "tree": {
     "name": "repo-memory",
-    "path": ".",
-    "files": [{ "name": "server.ts", "purpose": "entry point", "size": 4096 }],
+    "files": [{ "name": "server.ts", "purpose": "entry point" }],
     "children": [
       {
         "name": "cache",
-        "path": "src/cache",
         "files": [
-          { "name": "hash.ts", "purpose": "utility", "size": 512 },
-          { "name": "store.ts", "purpose": "data access", "size": 2048 }
+          { "name": "hash.ts", "purpose": "utility" },
+          { "name": "store.ts", "purpose": "data access" }
         ],
         "children": [],
         "fileCount": 5
@@ -124,13 +122,14 @@ Returns a structural overview: directory tree, entry points, and language breakd
 }
 ```
 
-- `depth` limits how deep the tree is traversed; omit for full depth.
-- `entryPoints` lists files whose summarized purpose is `"entry point"`.
+- `project_root` is optional (0.13.0+) — it defaults to the server's working directory, like every other tool.
+- `depth` defaults to 2 (0.13.0+) — enough to orient without dumping the whole tree (an unbounded map of a mid-size repo ran ~3,600 tokens). Pass a larger value for deeper structure.
+- `entryPoints` lists files whose summarized purpose starts with `"entry point"`.
 - Per-file confidence is available via `get_file_summary`; recency is covered by `get_changed_files`.
 
 ## `search_by_purpose`
 
-Finds files by purpose/exports keywords — search by concept (e.g. "database", "auth", "validation") instead of grepping. Matches against each file's purpose, exports, and top-level declarations; only files that have been summarized before (via `get_file_summary`, `batch_file_summaries`, or `force_reread`) are searchable. Matched files count as `summary_served` in telemetry.
+Finds files by purpose/exports keywords — search by concept (e.g. "database", "auth", "validation") instead of grepping. Matches against each file's purpose, exports, and top-level declarations; only files that have been summarized before (via `get_file_summary`, `batch_file_summaries`, `force_reread`, or the [[tools-reference#The repo-memory index CLI|`index` prewarm CLI]]) are searchable.
 
 **Input:**
 
@@ -142,12 +141,10 @@ Finds files by purpose/exports keywords — search by concept (e.g. "database", 
 
 ```json
 {
-  "query": "cache invalidation",
   "results": [
     {
       "path": "src/cache/invalidation.ts",
       "purpose": "source",
-      "matchedOn": ["exports", "declarations"],
       "exports": ["CacheInvalidator"],
       "confidence": "high"
     }
@@ -163,11 +160,15 @@ Finds files by purpose/exports keywords — search by concept (e.g. "database", 
 - `limit` (optional): max results. Default 20.
 - `pathPrefix` (optional): restrict results to files at or under this path (e.g. `"src/cache"`). Matched on a path boundary, so `"src/cache"` excludes `src/cache-utils.ts`.
 
-`totalCached` is the number of summarized files in scope (after `pathPrefix` filtering), not the number of matches. `scope` is present only when `pathPrefix` was given, echoing the normalized prefix.
+- `totalCached` is the number of summarized files in scope (after `pathPrefix` filtering), not the number of matches. If it is 0, warm the cache with `repo-memory index` first.
+- `scope` is present only when `pathPrefix` was given, echoing the normalized prefix.
+- `exports` is capped at 5 entries per result; when capped, `exportsTruncated` carries the total export count. The `query` echo and per-result `matchedOn` field were dropped in 0.13.0.
+- Matches are validated against disk before being served (0.13.0): a file that changed since it was summarized is re-summarized and re-scored, and a deleted file is evicted rather than returned — the never-stale rule applies to the discovery path too.
+- Telemetry records one `summary_served` event per query (not per matched file), booking a conservative estimate of what one full-file read would have cost.
 
 ## `get_related_files`
 
-Returns files related to a given file, ranked by relevance. Candidates come from direct imports/importers, transitive dependencies (depth 2), and same-directory files, then get scored by ranking signals (dependency proximity, recency, file type, task context, change frequency). Useful for deciding what else to look at when exploring a file. See [[design/relevance-ranking-design|the relevance-ranking design]] for the signal model.
+Returns files related to a given file, ranked by relevance. Candidates come from direct imports/importers, transitive dependencies (depth 2), and same-directory files, then get scored by weighted signals — relationship type, dependency proximity to the query file, recency, task context, file type, and degree centrality (0.13.0 weights). Useful for deciding what else to look at when exploring a file. See [[design/relevance-ranking-design|the relevance-ranking design]] for the signal model and shipped weights.
 
 **Input:**
 
@@ -198,28 +199,50 @@ Returns files related to a given file, ranked by relevance. Candidates come from
 
 ## `get_dependency_graph`
 
-Returns dependency graph information. Query a specific file's dependencies/dependents, or omit `path` for a full-graph summary of the most connected files.
+Returns dependency graph information as adjacency maps. Query a specific file's dependencies/dependents, or omit `path` for a whole-repo summary of the most connected files (large — prefer passing `path`). The graph is served from the persisted `imports` table with a freshness gate, so warm queries touch no project files; edge targets are real on-disk paths (0.13.0), so every path in the response can be followed with a read.
 
 **Parameters:**
 
-- `path` (optional): file to query. Omit for full graph summary.
-- `direction` (optional): `"dependencies"`, `"dependents"`, or `"both"` (default `"both"`).
+- `path` (optional): file to query. Omit only when you want the whole-repo summary.
+- `direction` (optional): `"dependencies"`, `"dependents"`, or `"both"` (default `"both"`). `deps` is present when the direction includes dependencies; `dependents` when it includes dependents.
 - `depth` (optional): max traversal depth for transitive queries.
-- `symbol` (optional): filter edges by import specifier (e.g. `"UserService"`), returning only edges that import that symbol.
+- `symbol` (optional): filter edges by import specifier (e.g. `"UserService"`), returning only edges that import that symbol (as a `deps` adjacency map).
+- `limit` (optional, no-path summary mode only): max files included in `deps`, ranked by connectivity. Default 50.
 
-**Output:**
+**Output (specific file):**
 
 ```json
 {
-  "nodes": ["src/server.ts", "src/tools/get-file-summary.ts"],
-  "edges": [{ "from": "src/server.ts", "to": "src/tools/get-file-summary.ts" }],
-  "stats": {
-    "totalFiles": 4,
-    "totalEdges": 3,
-    "mostConnected": [{ "path": "src/types.ts", "connections": 12 }]
-  }
+  "deps": {
+    "src/server.ts": [
+      "src/tools/get-changed-files.ts",
+      "src/tools/get-file-summary.ts",
+      "src/tools/invalidate.ts"
+    ]
+  },
+  "dependents": { "src/server.ts": [] },
+  "stats": { "totalFiles": 4, "totalEdges": 3 }
 }
 ```
+
+**Output (whole-repo summary):**
+
+```json
+{
+  "deps": {
+    "src/cache/store.ts": ["src/persistence/db.ts", "src/types.ts"],
+    "src/types.ts": []
+  },
+  "stats": {
+    "totalFiles": 118,
+    "totalEdges": 284,
+    "mostConnected": [{ "path": "src/types.ts", "connections": 12 }]
+  },
+  "truncated": true
+}
+```
+
+The adjacency-map shape replaced the old `nodes[]` + `edges[]` arrays in 0.13.0 — the array shape serialized every path three times, putting a no-path call at ~5,300 tokens; the same information as adjacency maps is less than half that. `stats.mostConnected` appears only in the no-path summary mode, where `stats` counts the whole graph and `truncated: true` flags that `deps` was capped by `limit`.
 
 ## `create_task`
 

@@ -16,9 +16,11 @@ title: Repo Memory Documentation
 ## Key Facts
 
 - **What it is:** an MCP server (stdio transport) that maintains a per-project cache of file summaries to cut token waste in agentic coding workflows.
-- **Package:** `@blamechris/repo-memory` (npm, currently 0.11.0). Storage lives in `.repo-memory/cache.db` (SQLite) in your project root.
+- **Package:** `@blamechris/repo-memory` (npm, currently 0.13.0). Storage lives in `.repo-memory/cache.db` (SQLite) in your project root.
 - **Tech:** TypeScript, Node.js 20+, MCP SDK, SQLite via `better-sqlite3`. ESM only, MIT licensed.
-- **Summaries:** regex extraction by default; an opt-in tree-sitter AST mode (`"summarizer": "ast"`, pure WASM, no native deps) yields exact exports and semantic purpose lines for TS/JS, Python, Go, Rust, Kotlin, and Java, with automatic per-file regex fallback. For Kotlin and Java (0.11.0+) the regex engine has no real extraction — AST mode is the first engine to actually parse them. See [[install-and-configuration#Summarizer|summarizer config]].
+- **Summaries:** tree-sitter AST extraction by default (0.12.0+; pure WASM, no native deps) — exact exports and semantic purpose lines for TS/JS, Python, Go, Rust, Kotlin, and Java, with automatic per-file regex fallback for other languages and parse errors. For Kotlin and Java the regex engine has no real extraction — AST mode is the first engine to actually parse them. See [[install-and-configuration#Summarizer|summarizer config]].
+- **Dependency graph:** import edges persist in SQLite and are written alongside summaries; graph queries serve from the stored edges through a freshness gate instead of re-reading the project (0.13.0). Edge targets are real on-disk paths, externals excluded.
+- **Token-shaped responses:** the 0.13.0 audit pass cut response sizes across the navigation tier — dependency-graph adjacency maps (−54%), a depth-2 default project map, and debug-field deletions — so a standard exploration sequence costs roughly a third of what it did. See [[design/agent-search-audit|the audit notes]].
 - **Prewarming:** the `repo-memory index` CLI populates the summary cache ahead of agent sessions (git post-merge hook, CI step), so the first session starts with cache hits — without recording telemetry events. See [[tools-reference#The repo-memory index CLI|the CLI reference]].
 - **Compression:** roughly a 3.6x compression ratio of full file versus summary, sustained across project sizes from 10 to 200 files.
 - **Source of truth:** [github.com/blamechris/repo-memory](https://github.com/blamechris/repo-memory).

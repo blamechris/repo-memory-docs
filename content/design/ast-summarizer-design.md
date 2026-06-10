@@ -2,7 +2,7 @@
 title: AST Summarizer — Spike and Rollout
 ---
 
-Design spike for the AST-based summarizer behind [[install-and-configuration#Summarizer|`"summarizer": "ast"`]] in `.repo-memory.json` (default `'regex'`). The engine lives in `src/indexer/ast-summarizer.ts`; config dispatch and cache generation in `src/indexer/summarize.ts`. The spike scoped TypeScript/JavaScript (`.ts/.tsx/.js/.jsx/.mjs/.cjs`); the recommendation was GO, and the rollout has since extended AST support to Python, Go, Rust, Kotlin, and Java.
+Design spike for the AST-based summarizer behind [[install-and-configuration#Summarizer|`"summarizer": "ast"`]] in `.repo-memory.json` — opt-in at spike time, the default since 0.12.0. The engine lives in `src/indexer/ast-summarizer.ts`; config dispatch in `src/indexer/summarize.ts` and generation rules in `src/cache/generation.ts`. The spike scoped TypeScript/JavaScript (`.ts/.tsx/.js/.jsx/.mjs/.cjs`); the recommendation was GO, and the rollout has since extended AST support to Python, Go, Rust, Kotlin, and Java.
 
 ## Hypothesis
 
@@ -80,8 +80,9 @@ Other categories keep their searchable prefix while gaining detail, e.g. `src/se
 Switching summarizers must regenerate stale summaries. Implemented via a generation tag rather than a hash salt (salting content hashes would have broken [[tools-reference#get_changed_files|`get_changed_files`]], which compares stored hashes against fresh file hashes):
 
 - Migration 6 adds a `meta` key/value table.
-- `ensureSummaryGeneration(projectRoot)` (called before any cache read in `get_file_summary`, `force_reread`, and project-map indexing) compares the stored `summarizer_generation` tag (`<mode>:<generation>`, e.g. `ast:1`) against the configured mode. On mismatch it nulls all `summary_json` columns — hashes and timestamps survive, so change detection is unaffected and summaries regenerate lazily — then records the new tag. Pre-existing databases without a tag are treated as `regex:1` (what produced them) and are not wiped.
-- `SUMMARIZER_GENERATION` in `summarize.ts` should be bumped whenever summary output changes materially within a mode.
+- `ensureSummaryGeneration(projectRoot)` (called before any cache read that can return a stored summary — including the search path, 0.13.0+) compares the stored `summarizer_generation` tag (`<mode>:<generation>`, e.g. `ast:3`) against the configured mode. On mismatch it nulls all `summary_json` columns — hashes and timestamps survive, so change detection is unaffected and summaries regenerate lazily — then records the new tag, atomically with the clear. Pre-existing databases without a tag are treated as produced by regex generation 1 and are not wiped.
+- `SUMMARIZER_GENERATION` (now in `src/cache/generation.ts`) should be bumped whenever summary output changes materially within a mode; it is at 3.
+- **Monotonicity (0.13.0):** generations only move forward. A process whose build is *older* than the stored tag — e.g. a long-running MCP server after an `npx` post-merge hook at a newer package version retagged the cache — must not clear, must not regress the tag, and must not persist its summaries; it serves read-through and the cache store strips its writes. Without this rule, two versions sharing a cache alternated clears in a regenerate-storm. The read-decide-write runs under a write lock so concurrent processes cannot interleave a bump between the read and the clear.
 
 ## Recommendation: GO
 
@@ -91,7 +92,7 @@ Rollout status:
 
 1. **Done.** Ship behind `summarizer: 'ast'` (this spike) — opt-in, default `regex`.
 2. **Done.** Vendor the grammar `.wasm` files into `dist/` at build time (`scripts/copy-grammars.mjs`, wired into `npm run build`); demote `tree-sitter-wasms` to a dev dependency. Grammar resolution prefers the vendored `dist/grammars/` copies and falls back to the `tree-sitter-wasms` devDependency when running from `src/` (dev/vitest). Cuts the runtime footprint from ~55 MB to ~11 MB unpacked; the tarball grows from ~72 kB to ~573 kB compressed (~5.7 MB unpacked).
-3. Flip the default to `ast` for TS/JS after a release of soak time; the generation tag handles the cache migration automatically.
+3. **Done.** Flip the default to `ast` (0.12.0, after a release of soak time); `"summarizer": "regex"` remains the opt-out. The generation tag handled the cache migration automatically.
 4. **Done.** Extend to Python/Go/Rust: per-language extraction visitors in `ast-summarizer.ts` (exports, imports, declarations, doc-comment purpose lines), with the three grammar wasms vendored alongside the TS/JS ones. Regex stays as the universal fallback; summarizer generation bumped to 2 so ast-mode caches for these languages regenerate lazily.
 5. **Done.** Fix the `async` export bug in the regex summarizer independently — it benefits the fallback path and non-TS languages' sibling patterns.
 6. **Done.** Extend to Kotlin (`.kt/.kts`) and Java (0.11.0): per-language extraction visitors (public-API exports with `private`/`internal` filtering for Kotlin and `public`-member filtering for Java, dotted import paths, KDoc/Javadoc purpose lines), grammar wasms vendored (8 total in `dist/grammars/`; tarball ~573 kB → ~1.2 MB compressed), summarizer generation bumped to 3. Unlike the earlier languages, the regex summarizer has no Kotlin/Java extraction, so AST mode is the only real engine for them — the fallback path yields generic filename-based classification only. Simple regex import extraction for Kotlin/Java was added to `imports.ts` so the dependency graph covers them in both modes. Known grammar quirk: `tree-sitter-kotlin` rejects single-line class bodies (`class C { fun f() {} }`), which triggers the regex fallback for such files.

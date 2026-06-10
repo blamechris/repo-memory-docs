@@ -2,7 +2,7 @@
 title: Relevance Ranking — Signals and Algorithm
 ---
 
-Design spike for ranking files by relevance to an agent's current context, so retrieval tools surface the most useful files first. The tool proposed here as `get_relevant_files` shipped as [[tools-reference#get_related_files|`get_related_files`]], which takes a `path` plus optional `limit` and `task_id` rather than a full context object.
+Design spike for ranking files by relevance to an agent's current context, so retrieval tools surface the most useful files first. The tool proposed here as `get_relevant_files` shipped as [[tools-reference#get_related_files|`get_related_files`]], which takes a `path` plus optional `limit` and `task_id` rather than a full context object. The signal set was reworked in 0.13.0 — see the shipped-weights note at the end.
 
 ## Approach: Weighted Scoring with Configurable Signals
 
@@ -97,3 +97,18 @@ A good ranking means the agent reads top-ranked files early instead of scanning 
 3. **Baseline**: compare against alphabetical order and recency-only sorting to confirm the composite score adds value.
 
 Target: precision\@10 >= 0.6 (at least 6 of the top 10 ranked files are ones the agent would have read).
+
+## Shipped Weights (0.13.0)
+
+The [[design/agent-search-audit|search-efficiency audit]] found that in the only production call path the design above degenerated to a constant: `cacheStore` was never passed (recency froze at its default), change frequency was a hardcoded placeholder, and without a `task_id` the proximity signals floored — so every top result tied at 0.325 and the "ranking" was alphabetical within file-type buckets. The 0.13.0 rework keeps the weighted-sum architecture but changes the signal set:
+
+| Signal | Weight | Notes |
+|--------|--------|-------|
+| **Relationship** | 0.30 | New — the candidate's relationship to the query file (`imports`/`imported-by` = 1.0, transitive = 0.5, same-directory = 0.25). The strongest evidence available was already computed and then thrown away. |
+| **Dependency proximity** | 0.25 | Now anchored to the query file (`1.0` direct, decaying by `1/2^(distance-1)`). |
+| **Recency** | 0.15 | Now live — the cache store is actually passed, so recently checked files score higher. |
+| **Task context** | 0.15 | Directory adjacency to the active task's explored/flagged files. |
+| **File type** | 0.10 | Mild prior: source over config over tests. |
+| **Centrality** | 0.05 | New — log-scaled degree centrality from the persisted graph; a deliberately small importance prior (the Aider PageRank direction, at 5% of the score). |
+
+**Change frequency** (git-log counting) and **name/path match** were deleted rather than implemented: the former was never built and costs a subprocess per file, and the latter belongs to `search_by_purpose`. With the new signals, repo-memory's own files tier cleanly — direct imports 0.76–0.87, transitive ~0.5, same-directory below — instead of tying.

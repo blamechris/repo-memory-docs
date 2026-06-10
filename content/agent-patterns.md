@@ -8,10 +8,10 @@ Recommended patterns for AI agents using repo-memory. These reduce token usage a
 
 When meeting a new codebase, start with the structural overview before diving into individual files.
 
-1. Call `get_project_map` for the directory tree, entry points, and language breakdown.
+1. Call `get_project_map` for the directory tree, entry points, and language breakdown (depth defaults to 2 — enough to orient; ask deeper only when needed).
 2. Identify entry points and key modules from the map.
 3. Call `get_file_summary` for each entry point to understand the top-level architecture.
-4. Follow imports from entry points to understand the dependency flow.
+4. Follow imports with `get_dependency_graph` — pass a `path`; the no-path whole-repo summary is the most expensive call in the toolset.
 
 Instead of reading every file (potentially thousands of tokens), you get structured summaries of only the files that matter — a 200-line file summary is roughly 50 tokens versus ~800 for the full file.
 
@@ -42,7 +42,7 @@ In a typical session only 1-5 files change between turns. Checking hashes is fas
 
 The cache is optimized for token savings, but sometimes you need the full file.
 
-**`suggestFullRead` flag** — when `get_file_summary` returns `suggestFullRead: true`, summary confidence is low. This happens with unusual syntax, files the regex summarizer cannot parse, or non-standard modules. Read the full file directly.
+**`suggestFullRead` flag** — when `get_file_summary` returns `suggestFullRead: true`, summary confidence is low. This happens with unusual syntax, files neither summarizer engine can parse, or non-standard modules. Read the full file directly.
 
 **`force_reread` for critical files** — use it when you are about to modify a file and need guaranteed-fresh data, when a summary seems wrong, or when external tools may have modified files outside the cache's view.
 

@@ -10,7 +10,7 @@ repo-memory is an MCP server over stdio with a layered design. Each layer is a f
 MCP Server (stdio transport)
 ├── Cache Engine (hash, store, invalidation, ranking, GC)
 ├── Indexer Pipeline (scanner, summarizer, imports, diff-analyzer)
-├── Dependency Graph (in-memory adjacency maps backed by SQLite)
+├── Dependency Graph (persisted import edges in SQLite + freshness gate)
 ├── Task Memory (CRUD, exploration tracking, frontier)
 ├── Telemetry (token tracking, sampling, export, retention)
 ├── Session Manager (cross-turn persistence)
@@ -18,8 +18,8 @@ MCP Server (stdio transport)
 ```
 
 - **Cache Engine** — hashes files (SHA-256), stores and invalidates summaries, ranks by access frequency, and garbage-collects stale entries. GC runs automatically on server startup, with age thresholds set in [[install-and-configuration#Garbage Collection|the `gc` config block]].
-- **Indexer Pipeline** — discovers files (respecting `.gitignore`), summarizes them via the configured engine (regex by default, or tree-sitter ASTs with [[install-and-configuration#Summarizer|`"summarizer": "ast"`]]), extracts imports/exports, and detects changes through a diff-analyzer.
-- **Dependency Graph** — in-memory adjacency maps backed by SQLite, powering [[tools-reference#get_dependency_graph|`get_dependency_graph`]]. Design notes: [[design/dependency-graph-design|Dependency Graph]].
+- **Indexer Pipeline** — discovers files (respecting `.gitignore`), summarizes them via the configured engine (tree-sitter ASTs by default, [[install-and-configuration#Summarizer|`"summarizer": "regex"`]] to opt out), extracts imports/exports, and detects changes through a diff-analyzer.
+- **Dependency Graph** — import edges persisted in SQLite (the `imports` table), written whenever a summary is generated and served back through a freshness gate: graph queries load the stored edges, stat-check files for changes (with a 2-second safety window against coarse filesystem timestamps), and re-read only files whose hash actually changed. A warm query touches no project files (0.13.0; earlier versions re-read every file and rewrote the whole table per call). Powers [[tools-reference#get_dependency_graph|`get_dependency_graph`]] and [[tools-reference#get_related_files|`get_related_files`]]. Design notes: [[design/dependency-graph-design|Dependency Graph]].
 - **Task Memory** — investigation-task CRUD plus exploration tracking and the unexplored frontier, powering the task tools. Design notes: [[design/task-memory-design|Task Memory]].
 - **Telemetry** — token tracking with sampling, export, and retention, powering [[tools-reference#get_token_report|`get_token_report`]].
 - **Session Manager** — cross-turn session persistence so investigations survive context-window resets.
@@ -46,7 +46,9 @@ tokensSaved = ceil(rawFileChars / 4) - ceil(summaryJsonChars / 4)
 | `cache_miss` | File changed or first access | 0 (no savings on first read) |
 | `force_reread` | Explicit re-read requested | Raw file token count |
 | `invalidation` | Cache entry cleared | — |
-| `summary_served` | File matched via `search_by_purpose` | Estimated raw file tokens |
+| `summary_served` | A `search_by_purpose` query returned results — one event per query (0.13.0) | Estimated tokens of one average result file read in full |
+
+The per-query `summary_served` accounting replaced per-match accounting in 0.13.0: booking every matched file as a full read avoided inflated "tokens saved" by up to the result limit, when the realistic counterfactual for one search is grepping and then reading roughly one candidate. Telemetry writes on read paths are best-effort — a locked database can never fail a search.
 
 Prewarm runs via the [[tools-reference#The repo-memory index CLI|`repo-memory index` CLI]] record no telemetry events (0.11.0+) — earlier versions logged a `cache_miss` per indexed file, which distorted agent-traffic hit-ratio stats. The report from [[tools-reference#get_token_report|`get_token_report`]] therefore reflects agent traffic only.
 
@@ -65,7 +67,7 @@ Run them yourself with `npm run benchmark`.
 
 ## Language Support
 
-Summaries are extracted via regex analysis, or from tree-sitter parse trees when [[install-and-configuration#Summarizer|`"summarizer": "ast"`]] is set. All six language families below have AST support in `ast` mode, which adds semantic purpose lines derived from doc comments; regex stays as the universal fallback for other languages and unparseable files.
+Summaries are extracted from tree-sitter parse trees by default (0.12.0+), or via regex analysis when [[install-and-configuration#Summarizer|`"summarizer": "regex"`]] is set. All six language families below have AST support, which adds semantic purpose lines derived from doc comments; regex stays as the universal fallback for other languages and unparseable files.
 
 - **TypeScript / JavaScript** — exports, imports, declarations, purpose classification; AST mode adds JSDoc-derived purpose lines
 - **Python** — functions, classes (incl. `async def`), `__all__`, `from`/`import` statements; AST mode adds docstring-derived purpose lines
@@ -74,7 +76,7 @@ Summaries are extracted via regex analysis, or from tree-sitter parse trees when
 - **Kotlin** (`.kt/.kts`, 0.11.0+) — AST mode only: public top-level `fun`/`class`/`object`/`interface`/`enum class`/`data class`/`val`/`var`/`typealias` (excluding `private`/`internal`), `import` paths, KDoc-derived purpose lines; regex mode gives only basic filename classification
 - **Java** (0.11.0+) — AST mode only: public types and the public methods/fields of the public type, `import` statements (incl. `static` and wildcard), Javadoc-derived purpose lines; regex mode gives only basic filename classification
 
-The dependency graph ([[tools-reference#get_related_files|`get_related_files`]], [[tools-reference#get_dependency_graph|`get_dependency_graph`]]) extracts imports for all six language families regardless of summarizer mode.
+The dependency graph ([[tools-reference#get_related_files|`get_related_files`]], [[tools-reference#get_dependency_graph|`get_dependency_graph`]]) extracts imports for all six language families regardless of summarizer mode — both tools share one extension list (0.13.0; they previously disagreed, so Kotlin/Java repos silently got empty graphs from one of them). Relative import targets are resolved to real on-disk paths at extraction time (`./store.js` → `src/cache/store.ts`), and bare specifiers (packages, builtins) are tagged external and kept out of the persisted graph, so every path the graph returns can actually be read.
 
 Config files (JSON, YAML, TOML) and other types get basic classification.
 
@@ -84,6 +86,8 @@ Config files (JSON, YAML, TOML) and other types get basic classification.
 - **SHA-256 hashing** — deterministic file comparison; unchanged hash means the cached summary is still valid.
 - **POSIX-normalized paths** — all stored paths (cache keys, import edges, task files) use forward slashes regardless of platform, so lookups and prefix scoping (e.g. `search_by_purpose`'s `pathPrefix`) behave identically on Windows and Unix.
 - **Per-key config validation** — an invalid value in `.repo-memory.json` is skipped with a warning while the valid keys still apply; only an unreadable or unparseable file falls back fully to defaults.
-- **Regex-first summarization, AST opt-in** — the default engine is fast regex extraction of exports, imports, and declarations; `"summarizer": "ast"` swaps in tree-sitter (pure WASM, no native compilation) for exact exports and semantic purpose lines, with per-file regex fallback on parse errors. The AST spike exposed the regex engine's biggest accuracy hole — `export async function` declarations were invisible to its export pattern (15 of 35 files in repo-memory's own `src/`) — which has since been fixed in the regex engine too. See the [[design/ast-summarizer-design|AST summarizer design notes]].
+- **AST-first summarization, regex fallback** — the default engine (0.12.0+) is tree-sitter (pure WASM, no native compilation) for exact exports and semantic purpose lines, with per-file regex fallback on parse errors and for languages without a grammar; `"summarizer": "regex"` opts out entirely. The AST spike exposed the regex engine's biggest accuracy hole — `export async function` declarations were invisible to its export pattern (15 of 35 files in repo-memory's own `src/`) — which has since been fixed in the regex engine too. See the [[design/ast-summarizer-design|AST summarizer design notes]].
+- **Monotonic generation tags** — the cache records which summarizer generation produced its summaries. A process at an older package version than the tag serves read-through without clearing, re-tagging, or persisting its own summaries, so a long-running server and a newer `npx` hook sharing one cache can never thrash it (0.13.0). Migrations run in `BEGIN IMMEDIATE` transactions with a busy timeout for the same multi-process reason.
+- **Token-shaped responses** — the scarce resource on the MCP path is response tokens, not query milliseconds (search measures 1–3 ms even at 2,000 files). Responses carry nothing an agent can't act on: no debug fields, adjacency maps instead of repeated path serialization, capped lists with explicit truncation flags. See [[design/agent-search-audit|the audit notes]].
 - **ESM only** — `"type": "module"` with NodeNext resolution.
-- **Cache correctness over performance** — never return stale data; when in doubt, re-read the file.
+- **Cache correctness over performance** — never return stale data; when in doubt, re-read the file. This applies to discovery too: search matches are hash-validated against disk before being served.

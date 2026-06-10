@@ -2,7 +2,7 @@
 title: Install and Configuration
 ---
 
-repo-memory ships as the npm package `@blamechris/repo-memory` and runs as an MCP server over stdio. It needs Node.js 20+. The current published version is 0.11.0; if you pin versions, note that 0.7.0 was never published — the npm registry goes straight from 0.6.0 to 0.8.0. Source: [github.com/blamechris/repo-memory](https://github.com/blamechris/repo-memory).
+repo-memory ships as the npm package `@blamechris/repo-memory` and runs as an MCP server over stdio. It needs Node.js 20+. The current published version is 0.13.0; if you pin versions, note that 0.7.0 was never published — the npm registry goes straight from 0.6.0 to 0.8.0. Source: [github.com/blamechris/repo-memory](https://github.com/blamechris/repo-memory).
 
 ## Quick Start with Claude Code
 
@@ -84,7 +84,7 @@ Create `.repo-memory.json` in your project root to customize behavior:
 {
   "ignore": ["dist", "node_modules", "*.generated.ts"],
   "maxFiles": 5000,
-  "summarizer": "ast",
+  "summarizer": "regex",
   "gc": {
     "cacheMaxAgeDays": 30,
     "taskMaxAgeDays": 30,
@@ -102,13 +102,13 @@ Create `.repo-memory.json` in your project root to customize behavior:
 
 ### Summarizer
 
-`summarizer` selects the summary engine: `"regex"` (default) or `"ast"`.
+`summarizer` selects the summary engine: `"ast"` (default since 0.12.0) or `"regex"`.
 
 AST mode parses files with tree-sitter compiled to WASM — there are no native dependencies to build. It produces accurate exports and declarations plus a semantic `purpose` line naming the dominant symbols (e.g. `class CacheStore (9 methods)` instead of the bare word `source`) — which is exactly what [[tools-reference#search_by_purpose|`search_by_purpose`]] matches against. The grammar `.wasm` files are vendored into the package at build time, so nothing extra is resolved or downloaded at install time.
 
-AST mode covers TypeScript/JavaScript, Python, Go, Rust, Kotlin (`.kt`/`.kts`), and Java (0.11.0+ covers all six language families). Other languages, unsupported extensions, and files with parse errors fall back to the regex summarizer automatically, per file — AST mode can never do worse than regex. For Kotlin and Java that matters more than for the rest: the regex engine never had extraction logic for them (fallback yields only basic filename classification), so AST mode is the first engine to actually parse them. One known Kotlin limit: the grammar rejects single-line class bodies (`class C { fun f() {} }`), which sends such files to the generic-classification fallback. See [[architecture#Language Support|language support]] for what each language's AST mode extracts.
+AST mode covers TypeScript/JavaScript, Python, Go, Rust, Kotlin (`.kt`/`.kts`), and Java. Other languages, unsupported extensions, and files with parse errors fall back to the regex summarizer automatically, per file — AST mode can never do worse than regex, which is why it graduated from opt-in to default after a release of soak time. For Kotlin and Java the difference matters more than for the rest: the regex engine never had extraction logic for them (fallback yields only basic filename classification), so AST mode is the first engine to actually parse them. One known Kotlin limit: the grammar rejects single-line class bodies (`class C { fun f() {} }`), which sends such files to the generic-classification fallback. See [[architecture#Language Support|language support]] for what each language's AST mode extracts.
 
-Switching modes regenerates cached summaries lazily on next access; file hashes and timestamps are untouched, so change detection keeps working. See the [[design/ast-summarizer-design|AST summarizer design notes]] for the measurements and tradeoffs behind the feature.
+Switching modes regenerates cached summaries lazily on next access; file hashes and timestamps are untouched, so change detection keeps working. The generation tag that drives this is monotonic (0.13.0): when several processes share one cache at different package versions — a long-running MCP server plus an `npx` post-merge hook, say — the older process serves read-through without clearing or re-tagging, so version skew can no longer cause regenerate-storms. See the [[design/ast-summarizer-design|AST summarizer design notes]] for the measurements and tradeoffs behind the feature.
 
 ### Tool Groups
 
