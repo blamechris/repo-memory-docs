@@ -2,7 +2,7 @@
 title: Install and Configuration
 ---
 
-repo-memory ships as the npm package `@blamechris/repo-memory` and runs as an MCP server over stdio. It needs Node.js 20+. Source: [github.com/blamechris/repo-memory](https://github.com/blamechris/repo-memory).
+repo-memory ships as the npm package `@blamechris/repo-memory` and runs as an MCP server over stdio. It needs Node.js 20+. The current published version is 0.9.0; if you pin versions, note that 0.7.0 was never published — the npm registry goes straight from 0.6.0 to 0.8.0. Source: [github.com/blamechris/repo-memory](https://github.com/blamechris/repo-memory).
 
 ## Quick Start with Claude Code
 
@@ -62,6 +62,7 @@ Create `.repo-memory.json` in your project root to customize behavior:
 {
   "ignore": ["dist", "node_modules", "*.generated.ts"],
   "maxFiles": 5000,
+  "summarizer": "ast",
   "gc": {
     "cacheMaxAgeDays": 30,
     "taskMaxAgeDays": 30,
@@ -76,6 +77,16 @@ Create `.repo-memory.json` in your project root to customize behavior:
 
 - `ignore` — glob patterns to exclude from scanning and summarization.
 - `maxFiles` — upper bound on files indexed.
+
+### Summarizer
+
+`summarizer` selects the summary engine: `"regex"` (default) or `"ast"`.
+
+AST mode parses files with tree-sitter compiled to WASM — there are no native dependencies to build. It produces accurate exports and declarations plus a semantic `purpose` line naming the dominant symbols (e.g. `class CacheStore (9 methods)` instead of the bare word `source`) — which is exactly what [[tools-reference#search_by_purpose|`search_by_purpose`]] matches against. The grammar `.wasm` files are vendored into the package at build time, so nothing extra is resolved or downloaded at install time.
+
+AST mode covers TypeScript/JavaScript, Python, Go, and Rust (the 0.9.0 release ships TS/JS; Python/Go/Rust support is on `main` and lands in the next release). Other languages, unsupported extensions, and files with parse errors fall back to the regex summarizer automatically, per file — AST mode can never do worse than regex.
+
+Switching modes regenerates cached summaries lazily on next access; file hashes and timestamps are untouched, so change detection keeps working. See the [[design/ast-summarizer-design|AST summarizer design notes]] for the measurements and tradeoffs behind the feature.
 
 ### Tool Groups
 

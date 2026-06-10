@@ -11,13 +11,14 @@ title: Repo Memory Documentation
 - [[install-and-configuration|Install and Configuration]] — getting set up with Claude Code or a global install
 - [[agent-patterns|Agent Usage Patterns]] — recommended exploration patterns for agents
 - [[developer-guide|Developer Guide]] — contributing, project structure, and conventions
-- [[design/index|Design Notes]] — the design spikes behind task memory, the dependency graph, relevance ranking, and diff-aware updates
+- [[design/index|Design Notes]] — the design spikes behind the AST summarizer, task memory, the dependency graph, relevance ranking, and diff-aware updates
 
 ## Key Facts
 
 - **What it is:** an MCP server (stdio transport) that maintains a per-project cache of file summaries to cut token waste in agentic coding workflows.
-- **Package:** `@blamechris/repo-memory` (npm). Storage lives in `.repo-memory/cache.db` (SQLite) in your project root.
+- **Package:** `@blamechris/repo-memory` (npm, currently 0.9.0). Storage lives in `.repo-memory/cache.db` (SQLite) in your project root.
 - **Tech:** TypeScript, Node.js 20+, MCP SDK, SQLite via `better-sqlite3`. ESM only, MIT licensed.
+- **Summaries:** regex extraction by default; an opt-in tree-sitter AST mode (`"summarizer": "ast"`, pure WASM, no native deps) yields exact exports and semantic purpose lines for TS/JS, Python, Go, and Rust, with automatic per-file regex fallback. See [[install-and-configuration#Summarizer|summarizer config]].
 - **Compression:** roughly a 3.6x compression ratio of full file versus summary, sustained across project sizes from 10 to 200 files.
 - **Source of truth:** [github.com/blamechris/repo-memory](https://github.com/blamechris/repo-memory).
 
@@ -27,7 +28,7 @@ Tools are organized into **groups**: `navigation` and `summaries` are on by defa
 
 | Tool | Group | What it does |
 |------|-------|--------------|
-| `get_project_map` | navigation | Structural overview: tree, entry points, language breakdown |
+| `get_project_map` | navigation | Compact structural overview: tree, entry points, language breakdown |
 | `get_related_files` | navigation | Related files ranked by relevance |
 | `get_dependency_graph` | navigation | File dependency relationships |
 | `get_changed_files` | navigation | Files changed, added, or deleted since last check |

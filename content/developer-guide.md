@@ -31,6 +31,8 @@ npm run format            # Prettier
 npm run benchmark         # Performance benchmarks
 ```
 
+`npm run build` also vendors the tree-sitter grammar `.wasm` files into `dist/grammars/` (via `scripts/copy-grammars.mjs`), so the published package carries its own grammars for the AST summarizer; `tree-sitter-wasms` is only a devDependency.
+
 ## Project Structure
 
 ```
@@ -47,7 +49,9 @@ src/
     gc.ts             #   Garbage collection for stale entries
   indexer/            # File analysis pipeline
     scanner.ts        #   Project file discovery (respects .gitignore)
+    summarize.ts      #   Summarizer dispatch (regex vs AST) + cache generation tag
     summarizer.ts     #   Regex-based file summarization
+    ast-summarizer.ts #   Tree-sitter (WASM) summarization: TS/JS, Python, Go, Rust
     smart-summarizer.ts # Enhanced summarization
     imports.ts        #   Import/export extraction
     diff-analyzer.ts  #   Change detection

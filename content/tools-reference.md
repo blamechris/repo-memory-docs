@@ -48,6 +48,7 @@ Returns a cached summary of a file. If the file has not changed since last read,
 
 - `suggestFullRead` is `true` when summary confidence is `"low"`, signalling the agent should read the full file for accuracy.
 - `cacheAge` is in seconds since last check, or `null` if no prior cache entry exists.
+- Summary quality depends on the `summarizer` setting in `.repo-memory.json`: `"regex"` (default) or `"ast"`. AST mode yields more accurate exports and a semantic `purpose` line naming the dominant symbols; files that fail to parse fall back to the regex engine automatically. See [[install-and-configuration#Summarizer|the summarizer config]].
 
 ## `batch_file_summaries`
 
@@ -87,7 +88,7 @@ Returns files that have changed, been added, or been deleted since the last chec
 
 ## `get_project_map`
 
-Returns a structural overview: directory tree, entry points, and language breakdown.
+Returns a structural overview: directory tree, entry points, and language breakdown. The output is deliberately compact — per-file entries carry only `name`, `purpose`, and `size` (no `lastModified` or `confidence`), and zero-byte `.gitkeep` placeholder files are omitted from the tree, making the map roughly 45% smaller.
 
 **Input:**
 
@@ -95,8 +96,37 @@ Returns a structural overview: directory tree, entry points, and language breakd
 { "project_root": "/absolute/path/to/project", "depth": 2 }
 ```
 
+**Output:**
+
+```json
+{
+  "tree": {
+    "name": "repo-memory",
+    "path": ".",
+    "files": [{ "name": "server.ts", "purpose": "entry point", "size": 4096 }],
+    "children": [
+      {
+        "name": "cache",
+        "path": "src/cache",
+        "files": [
+          { "name": "hash.ts", "purpose": "utility", "size": 512 },
+          { "name": "store.ts", "purpose": "data access", "size": 2048 }
+        ],
+        "children": [],
+        "fileCount": 5
+      }
+    ],
+    "fileCount": 25
+  },
+  "entryPoints": ["src/server.ts"],
+  "totalFiles": 25,
+  "languageBreakdown": { ".ts": 22, ".json": 2, ".md": 1 }
+}
+```
+
 - `depth` limits how deep the tree is traversed; omit for full depth.
 - `entryPoints` lists files whose summarized purpose is `"entry point"`.
+- Per-file confidence is available via `get_file_summary`; recency is covered by `get_changed_files`.
 
 ## `search_by_purpose`
 
