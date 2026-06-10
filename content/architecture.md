@@ -26,7 +26,7 @@ MCP Server (stdio transport)
 
 ## How the Cache Works
 
-**First access (cache miss):** the agent calls [[tools-reference#get_file_summary|`get_file_summary`]]. The server reads the file, SHA-256 hashes it, extracts a summary via the configured summarizer (exports, imports, purpose, declarations, line count), stores the hash plus summary in SQLite, and returns the compact summary. No savings yet — the file had to be read.
+**First access (cache miss):** the agent calls [[tools-reference#get_file_summary|`get_file_summary`]]. The server reads the file, SHA-256 hashes it, extracts a summary via the configured summarizer (exports, imports, purpose, declarations, line count), stores the hash plus summary in SQLite, and returns the compact summary. No savings yet — the file had to be read. (The [[tools-reference#The repo-memory index CLI|`repo-memory index` CLI]] can pay this first-read cost ahead of time, e.g. as a post-pull hook or CI step.)
 
 **Subsequent access (cache hit):** the server re-reads and hashes the file; the hash matches the stored value, so it returns the cached summary without re-parsing. The savings — full-file tokens minus summary tokens — are logged.
 

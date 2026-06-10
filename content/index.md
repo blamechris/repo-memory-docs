@@ -16,9 +16,10 @@ title: Repo Memory Documentation
 ## Key Facts
 
 - **What it is:** an MCP server (stdio transport) that maintains a per-project cache of file summaries to cut token waste in agentic coding workflows.
-- **Package:** `@blamechris/repo-memory` (npm, currently 0.9.0). Storage lives in `.repo-memory/cache.db` (SQLite) in your project root.
+- **Package:** `@blamechris/repo-memory` (npm, currently 0.10.0). Storage lives in `.repo-memory/cache.db` (SQLite) in your project root.
 - **Tech:** TypeScript, Node.js 20+, MCP SDK, SQLite via `better-sqlite3`. ESM only, MIT licensed.
 - **Summaries:** regex extraction by default; an opt-in tree-sitter AST mode (`"summarizer": "ast"`, pure WASM, no native deps) yields exact exports and semantic purpose lines for TS/JS, Python, Go, and Rust, with automatic per-file regex fallback. See [[install-and-configuration#Summarizer|summarizer config]].
+- **Prewarming:** the `repo-memory index` CLI populates the summary cache ahead of agent sessions (post-pull hook, CI step), so the first session starts with cache hits. See [[tools-reference#The repo-memory index CLI|the CLI reference]].
 - **Compression:** roughly a 3.6x compression ratio of full file versus summary, sustained across project sizes from 10 to 200 files.
 - **Source of truth:** [github.com/blamechris/repo-memory](https://github.com/blamechris/repo-memory).
 

@@ -6,7 +6,7 @@ repo-memory exposes 13 MCP tools, organized into four **groups**. `navigation` a
 
 The cache-correctness rule applies across all tools: the server never returns stale data — if a file's SHA-256 hash has changed, a fresh summary is generated automatically. All stored and returned paths are POSIX-normalized (forward slashes), regardless of platform. Source: [github.com/blamechris/repo-memory](https://github.com/blamechris/repo-memory).
 
-See also: [[agent-patterns|Agent Usage Patterns]] for how to combine these tools, and [[install-and-configuration|Install and Configuration]] to get them into Claude Code.
+See also: [[agent-patterns|Agent Usage Patterns]] for how to combine these tools, and [[install-and-configuration|Install and Configuration]] to get them into Claude Code. Besides the MCP tools, the package ships one CLI subcommand for prewarming the cache — see [[tools-reference#The repo-memory index CLI|the `repo-memory index` CLI]] at the end of this page.
 
 | Group | Tools | Default |
 |-------|-------|---------|
@@ -316,3 +316,35 @@ Invalidates cached entries. Target a single file via `path`, or pass an empty ob
 ```json
 { "invalidated": "all", "entriesRemoved": 47 }
 ```
+
+## The `repo-memory index` CLI
+
+Not an MCP tool, but part of the same package (0.10.0+). Running the `repo-memory` binary with no arguments starts the MCP server on stdio; `repo-memory index [projectRoot] [--quiet]` instead prewarms the summary cache and exits. The first time an agent touches a file it pays full price — the summary has to be generated — so this lets you pay that cost ahead of time (post-pull hook, CI step) and start the first session with cache hits.
+
+```bash
+repo-memory index            # index the current directory
+repo-memory index /path/to/project
+repo-memory index --quiet    # no output on success (for scripts/CI)
+```
+
+It scans the project, hashes every indexable file, and generates summaries for entries that are missing or stale. Unchanged files are left untouched, so it is cheap to run repeatedly. It reuses the standard summary path, so it respects `.repo-memory.json` (ignore patterns, `maxFiles`, [[install-and-configuration#Summarizer|summarizer mode]]); MCP server behavior is unchanged.
+
+**Output:**
+
+```
+$ repo-memory index
+Indexed /path/to/project
+  scanned:       128
+  summarized:    126
+  already fresh: 2
+  skipped:       0
+  elapsed:       0.42s
+  cache db:      /path/to/project/.repo-memory/cache.db
+```
+
+**Parameters:**
+
+- `projectRoot` (optional): directory to index. Default: current directory.
+- `--quiet` / `-q`: print nothing on success.
+
+Exits `0` on success, `1` on error (message on stderr).
