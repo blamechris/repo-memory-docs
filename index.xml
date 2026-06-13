@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<rss version="2.0">
+    <channel>
+      <title>Repo Memory Documentation</title>
+      <link>https://www.blamechris.com/repo-memory-docs</link>
+      <description>Last 10 notes on Repo Memory Documentation</description>
+      <generator>Quartz -- quartz.jzhao.xyz</generator>
+      <item>
+    <title>Architecture and Caching</title>
+    <link>https://www.blamechris.com/repo-memory-docs/architecture</link>
+    <guid>https://www.blamechris.com/repo-memory-docs/architecture</guid>
+    <description><![CDATA[ repo-memory is an MCP server over stdio with a layered design. ]]></description>
+    <pubDate>Sat, 13 Jun 2026 06:38:37 GMT</pubDate>
+  </item><item>
+    <title>Agent Search Efficiency — Audit and Outcomes</title>
+    <link>https://www.blamechris.com/repo-memory-docs/design/agent-search-audit</link>
+    <guid>https://www.blamechris.com/repo-memory-docs/design/agent-search-audit</guid>
+    <description><![CDATA[ A six-lens audit (June 2026) of the retrieval path — search_by_purpose, get_related_files, get_dependency_graph, get_project_map, and the ranking behind them — prompted by the question “what search tech should we add?” Six candidate ideas from the wild were evaluated: FTS5/BM25, embeddings, a persis... ]]></description>
+    <pubDate>Sat, 13 Jun 2026 06:38:37 GMT</pubDate>
+  </item><item>
+    <title>Repo Memory Documentation</title>
+    <link>https://www.blamechris.com/repo-memory-docs/</link>
+    <guid>https://www.blamechris.com/repo-memory-docs/</guid>
+    <description><![CDATA[ repo-memory is an MCP (Model Context Protocol) server that gives AI coding agents persistent, structured memory about a codebase. ]]></description>
+    <pubDate>Sat, 13 Jun 2026 06:38:37 GMT</pubDate>
+  </item><item>
+    <title>Install and Configuration</title>
+    <link>https://www.blamechris.com/repo-memory-docs/install-and-configuration</link>
+    <guid>https://www.blamechris.com/repo-memory-docs/install-and-configuration</guid>
+    <description><![CDATA[ repo-memory ships as the npm package @blamechris/repo-memory and runs as an MCP server over stdio. It needs Node.js 20+. ]]></description>
+    <pubDate>Sat, 13 Jun 2026 06:38:37 GMT</pubDate>
+  </item><item>
+    <title>MCP Tools Reference</title>
+    <link>https://www.blamechris.com/repo-memory-docs/tools-reference</link>
+    <guid>https://www.blamechris.com/repo-memory-docs/tools-reference</guid>
+    <description><![CDATA[ repo-memory exposes 13 MCP tools, organized into four groups. ]]></description>
+    <pubDate>Sat, 13 Jun 2026 06:38:37 GMT</pubDate>
+  </item><item>
+    <title>Agent Usage Patterns</title>
+    <link>https://www.blamechris.com/repo-memory-docs/agent-patterns</link>
+    <guid>https://www.blamechris.com/repo-memory-docs/agent-patterns</guid>
+    <description><![CDATA[ Recommended patterns for AI agents using repo-memory. ]]></description>
+    <pubDate>Wed, 10 Jun 2026 09:23:04 GMT</pubDate>
+  </item><item>
+    <title>AST Summarizer — Spike and Rollout</title>
+    <link>https://www.blamechris.com/repo-memory-docs/design/ast-summarizer-design</link>
+    <guid>https://www.blamechris.com/repo-memory-docs/design/ast-summarizer-design</guid>
+    <description><![CDATA[ Design spike for the AST-based summarizer behind [[install-and-configuration#summarizer|&quot;summarizer&quot;: &quot;ast&quot;]] in .repo-memory.json — opt-in at spike time, the default since 0.12.0. ]]></description>
+    <pubDate>Wed, 10 Jun 2026 09:23:04 GMT</pubDate>
+  </item><item>
+    <title>Dependency Graph — Data Model and Query Patterns</title>
+    <link>https://www.blamechris.com/repo-memory-docs/design/dependency-graph-design</link>
+    <guid>https://www.blamechris.com/repo-memory-docs/design/dependency-graph-design</guid>
+    <description><![CDATA[ Design for the dependency graph that powers [[tools-reference#get_dependency_graph|get_dependency_graph]] and feeds the relevance-ranking signals. ]]></description>
+    <pubDate>Wed, 10 Jun 2026 09:23:04 GMT</pubDate>
+  </item><item>
+    <title>Design Notes</title>
+    <link>https://www.blamechris.com/repo-memory-docs/design/</link>
+    <guid>https://www.blamechris.com/repo-memory-docs/design/</guid>
+    <description><![CDATA[ Design spikes and data-model write-ups for repo-memory’s bigger subsystems, ported from the repo’s docs/planning/ directory. ]]></description>
+    <pubDate>Wed, 10 Jun 2026 09:23:04 GMT</pubDate>
+  </item><item>
+    <title>Relevance Ranking — Signals and Algorithm</title>
+    <link>https://www.blamechris.com/repo-memory-docs/design/relevance-ranking-design</link>
+    <guid>https://www.blamechris.com/repo-memory-docs/design/relevance-ranking-design</guid>
+    <description><![CDATA[ Design spike for ranking files by relevance to an agent’s current context, so retrieval tools surface the most useful files first. ]]></description>
+    <pubDate>Wed, 10 Jun 2026 09:23:04 GMT</pubDate>
+  </item>
+    </channel>
+  </rss>
