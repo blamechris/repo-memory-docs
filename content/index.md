@@ -16,7 +16,7 @@ title: Repo Memory Documentation
 ## Key Facts
 
 - **What it is:** an MCP server (stdio transport) that maintains a per-project cache of file summaries to cut token waste in agentic coding workflows.
-- **Package:** `@blamechris/repo-memory` (npm, currently 0.15.0). Storage lives in `.repo-memory/cache.db` (SQLite) in your project root.
+- **Package:** `@blamechris/repo-memory` (npm, currently 0.17.0). Storage lives in `.repo-memory/cache.db` (SQLite) in your project root.
 - **Tech:** TypeScript, Node.js 20+, MCP SDK, SQLite via `better-sqlite3`. ESM only, MIT licensed.
 - **Summaries:** tree-sitter AST extraction by default (0.12.0+; pure WASM, no native deps) — exact exports and semantic purpose lines for TS/JS, Python, Go, Rust, Kotlin, and Java, with automatic per-file regex fallback for other languages and parse errors. For Kotlin and Java the regex engine has no real extraction — AST mode is the first engine to actually parse them. See [[install-and-configuration#Summarizer|summarizer config]].
 - **Dependency graph:** import edges persist in SQLite and are written alongside summaries; graph queries serve from the stored edges through a freshness gate instead of re-reading the project (0.13.0). Edge targets are real on-disk paths, externals excluded.

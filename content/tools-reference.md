@@ -166,7 +166,7 @@ Matching is word-boundary aware (0.14.0): identifiers are split on camelCase/sna
 - `scope` is present only when `pathPrefix` was given, echoing the normalized prefix.
 - `exports` is capped at 5 entries per result; when capped, `exportsTruncated` carries the total export count. The `query` echo and per-result `matchedOn` field were dropped in 0.13.0.
 - Matches are validated against disk before being served (0.13.0): a file that changed since it was summarized is re-summarized and re-scored, and a deleted file is evicted rather than returned — the never-stale rule applies to the discovery path too.
-- Telemetry records one `summary_served` event per query (not per matched file), booking a conservative estimate of what one full-file read would have cost.
+- Telemetry records one `summary_served` event per query that returns results (not per matched file), booking a conservative estimate of what one full-file read would have cost. A query that matches **nothing** against a non-empty corpus records a `search_miss` instead (0.17.0+), surfaced in [[tools-reference#The repo-memory report CLI|`repo-memory report`]] as failed searches.
 
 ## `get_related_files`
 
@@ -403,9 +403,12 @@ $ repo-memory report --hours 24
 Token report for /path/to/project (last 24h)
   events:        156 (132 hits / 24 misses, 84.6% hit ratio)
   tokens saved:  ~482,000
-  breakdown:     cache_hit 132, cache_miss 24
+  breakdown:     cache_hit 132, cache_miss 20, search_miss 4
   top files:
     12x src/server.ts (~8,400 tokens)
+  failed searches: 4 (queries that matched nothing — candidates for ranking gaps)
+    3x "websocket reconnect"
+    1x "oauth refresh"
 ```
 
 **Parameters:**
@@ -414,5 +417,7 @@ Token report for /path/to/project (last 24h)
 - `--hours N`: restrict to the last N hours (default: all recorded events).
 - `--json`: print the raw report JSON.
 - `--diagnostics`: include cache health (entry counts, stale entries, db size, age distribution).
+
+**Failed searches (0.17.0+).** A `search_by_purpose` query that matches nothing against a non-empty corpus records a `search_miss` event (the query is kept in metadata; an empty/cold cache records nothing). The report aggregates these into `topMissedQueries` — a ranked list of what agents searched for that the lexical ranking couldn't satisfy. It's the signal the [[design/agent-search-audit|search audit]] named for deciding whether richer search (FTS5) earns its keep, and a standing pointer to files whose summaries could be better. `report --json` carries `topMissedQueries` as an additive field on the stable [[tools-reference#get_token_report|TokenReport]] shape.
 
 Exits `0` on success, `1` on error (message on stderr).

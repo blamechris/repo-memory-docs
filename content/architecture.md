@@ -47,6 +47,7 @@ tokensSaved = ceil(rawFileChars / 4) - ceil(summaryJsonChars / 4)
 | `force_reread` | Explicit re-read requested | Raw file token count |
 | `invalidation` | Cache entry cleared | — |
 | `summary_served` | A `search_by_purpose` query returned results — one event per query (0.13.0) | Estimated tokens of one average result file read in full |
+| `search_miss` | A `search_by_purpose` query matched nothing against a non-empty corpus (0.17.0) | 0 — books no savings; carries the query in metadata |
 
 The per-query `summary_served` accounting replaced per-match accounting in 0.13.0: booking every matched file as a full read avoided inflated "tokens saved" by up to the result limit, when the realistic counterfactual for one search is grepping and then reading roughly one candidate. Telemetry writes on read paths are best-effort — a locked database can never fail a search.
 
